@@ -1,0 +1,66 @@
+﻿using CloudCore.Domain.Entities;
+using static CloudCore.Contracts.Responses.ItemResultResponses;
+
+namespace CloudCore.Services.Interfaces
+{
+    /// <summary>
+    /// Defines a domain service responsible for orchestrating complex business logic involving Item entities.
+    /// This service does not directly handle data persistence but prepares entities for operations like creation, renaming, and deletion.
+    /// </summary>
+    public interface IItemManagerService
+    {
+        /// <summary>
+        /// Prepares an item and its children (if it's a folder) for a rename operation.
+        /// This includes updating the name of the primary item and recalculating file paths for all descendants.
+        /// </summary>
+        /// <param name="item">The item (file or folder) to be renamed.</param>
+        /// <param name="newName">The new name for the item.</param>
+        /// <param name="childItems">Optional collection of all descendant items if the primary item is a folder.</param>
+        /// <param name="folderPath">The current absolute path of the folder on disk. Required only if renaming a folder.</param>
+        /// <returns>A list of all item entities (primary and children) that have been modified and need to be updated in the database.</returns>
+        IAsyncEnumerable<Item> PrepareItemsForRenaming(Item item, string newName, IAsyncEnumerable<Item>? childItems = null, string? folderPath = null);
+
+        /// <summary>
+        /// Prepares an item and its children (if it's a folder) for a soft-delete operation.
+        /// This involves setting the IsDeleted flag to true and recording the deletion timestamp.
+        /// </summary>
+        /// <param name="items">A collection of items to be soft deleted.</param>
+        IAsyncEnumerable<Item> PrepareItemsForSoftDeleteAsync(IAsyncEnumerable<Item> items);
+
+        /// <summary>
+        /// Prepares one or more items for restoration from a soft-deleted state.
+        /// This involves setting the IsDeleted flag to false and clearing the deletion timestamp.
+        /// </summary>
+        /// <param name="items">A collection of items to be restored.</param>
+        IAsyncEnumerable<Item> PrepareItemsForRestoreAsync(IAsyncEnumerable<Item> items);
+
+        /// <summary>
+        /// Processes a file upload by saving the file to physical storage and creating a corresponding Item entity.
+        /// </summary>
+        /// <param name="userId">The ID of the user uploading the file.</param>
+        /// <param name="parentId">Optional. The ID of the parent folder where the file will be located.</param>
+        /// <param name="file">The uploaded file from the HTTP request.</param>
+        /// <param name="taregetDirectory">The relative directory path where the file should be saved.</param>
+        /// <returns>A new Item entity, populated with metadata from the uploaded file, ready to be saved to the database.</returns>
+        Task<Item> ProcessUploadAsync(int userId, int? parentId, IFormFile file, string taregetDirectory);
+
+
+        /// <summary>
+        /// Prepares an item and its children (if it's a folder) for a move operation.
+        /// Updates file paths for child items and performs the physical file system move.
+        /// </summary>
+        /// <param name="item">The item (file or folder) to be moved.</param>
+        /// <param name="newParentId">The ID of the target parent folder where the item will be moved.</param>
+        /// <param name="destinationFolderPath">The full absolute path to the destination folder where the item will be placed.</param>
+        /// <param name="sourceFolderPath">The full absolute path to the source folder (required for folder type items).</param>
+        /// <param name="childItems">Optional list of child items that need path updates (applicable when moving folders with contents).</param>
+        /// <returns>A list of items with updated metadata (ParentId, FilePath, UpdatedAt) that need to be saved to the database.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="item"/> is null.</exception>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="destinationFolderPath"/> is null or whitespace, or when <paramref name="sourceFolderPath"/> is missing for folder type items.</exception>
+        /// <exception cref="NotSupportedException">Thrown when the item type is not 'file' or 'folder'.</exception>
+        IAsyncEnumerable<Item> PrepareItemsForMoving(Item item, int? newParentId, string destinationFolderPath, string? sourceFolderPath, IAsyncEnumerable<Item>? childItems = null);
+
+
+
+    }
+}

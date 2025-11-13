@@ -1,0 +1,85 @@
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/ssl/cloudflare:/etc/nginx/ssl:ro # PRODUCTION CERTS
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      args:
+        RUN_TESTS: ${RUN_TESTS:-false}
+    ports:
+      - "5000:5000"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production # Changed to Production
+      - ASPNETCORE_URLS=http://+:5000
+      - DB_HOST=database
+      - DB_PORT=3306
+      - DB_NAME=CloudCoreDB
+      - DB_USER=root
+      - DB_PASSWORD=${DB_PASSWORD}
+      - FileStorage__BasePath=/app/storage
+      - Email_Host=${EMAIL_HOST:-smtp.gmail.com} # Use real email in production
+      - Email_Port=${EMAIL_PORT:-587}
+      - Email_SenderEmail=${EMAIL_SENDER_EMAIL}
+      - Email_Sender=CloudCore
+      - JWT_KEY=${JWT_KEY}
+      - JWT_ISSUER=${JWT_ISSUER:-CloudCore}
+      - JWT_AUDIENCE=${JWT_AUDIENCE:-CloudCore}
+      - JWT_TOKEN_EXPIRATION_DAYS=${JWT_TOKEN_EXPIRATION_DAYS:-7}
+    volumes:
+      - ./backend/storage:/app/storage
+    depends_on:
+      database:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  database:
+    image: mysql:8.0
+    environment:
+      MYSQL_HOST: database
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: CloudCoreDB
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/init:/docker-entrypoint-initdb.d
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  # Remove mailhog in production or keep if you want it for testing
+  # mailhog:
+  #   image: mailhog/mailhog:latest
+  #   ports:
+  #     - "127.0.0.1:8025:8025"  # Only localhost
+  #     - "127.0.0.1:1025:1025"
+  #   networks:
+  #     - app-network
+
+volumes:
+  mysql_data:
+
+networks:
+  app-network:
+    driver: bridge
